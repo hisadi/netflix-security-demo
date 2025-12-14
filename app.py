@@ -204,10 +204,11 @@ elif "VISITOR" in role:
                 # LOGIKA KEPUTUSAN FINAL
                 if same_ip:
                     st.balloons()
-                    st.success("✅ **LOGIN SUKSES (Household Valid)**\n\nAnda terhubung ke WiFi rumah yang sama.")
+                    st.success("✅ **LOGIN SUKSES (Household Valid)**\n\nBukan akses mencurigakan.")
                 elif dist < 0.5: # Kurang dari 500 meter
                     st.warning("⚠️ **VERIFIKASI OTP (Soft Block)**\n\nLokasi cocok, tapi jaringan berbeda (Data Seluler).")
                 else:
                     st.error("⛔ **BLOKIR: IMPOSSIBLE SHARING**\n\nLokasi jauh & Jaringan berbeda. Indikasi Sharing Ilegal.")
             else:
                 st.write("⏳ Menunggu sinyal GPS...")
+
