@@ -95,9 +95,17 @@ def calculate_propensity(os_name, width):
 
 # DATABASE UTILS
 def load_db():
-    if not os.path.exists(DB_FILE): return None
-    try: with open(DB_FILE, 'r') as f: return json.load(f)
-    except: return None
+    # Cek dulu apakah file ada
+    if not os.path.exists(DB_FILE): 
+        return None
+    
+    # Coba buka file
+    try:
+        with open(DB_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        # Jika file rusak atau error, kembalikan None
+        return None
 
 def save_db(data):
     with open(DB_FILE, 'w') as f: json.dump(data, f)
@@ -306,3 +314,4 @@ else:
             st.error("❌ Frase salah. Ketikan tidak dapat dianalisis.")
         else:
             st.warning("⏳ Waiting for GPS...")
+
