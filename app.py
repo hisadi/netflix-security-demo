@@ -8,94 +8,80 @@ from streamlit_js_eval import get_geolocation, streamlit_js_eval
 from math import radians, cos, sin, asin, sqrt
 
 # ==========================================
-# 1. SETUP UI: SESUAI INFOGRAFIS PPT
+# 1. UI CONFIGURATION
 # ==========================================
-st.set_page_config(page_title="Strategic AI Monetization", page_icon="📊", layout="wide")
-DB_FILE = 'netflix_ppt_db.json'
+st.set_page_config(page_title="Netflix Strategic AI", page_icon="🧠", layout="wide")
+DB_FILE = 'netflix_full_db.json'
 
-# Styling agar mirip Dashboard Analytics profesional
 st.markdown("""
 <style>
-    .stApp { background-color: #F5F7F8; color: #333; }
+    /* Global Styles */
+    .stApp { background-color: #F8F9FA; color: #212529; }
     h1, h2, h3 { color: #E50914 !important; font-weight: 800 !important; }
     
-    /* Box Strategi */
-    .strat-box {
-        background-color: white;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
-        border-left: 5px solid #E50914;
+    /* Forensic Table */
+    .forensic-table {
+        width: 100%; border-collapse: collapse; margin-bottom: 20px;
+        background: white; border-radius: 8px; overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
+    .forensic-table th { background: #E50914; color: white; padding: 12px; text-align: left; }
+    .forensic-table td { padding: 10px; border-bottom: 1px solid #dee2e6; color: #333; }
+    .forensic-table tr:last-child td { border-bottom: none; }
     
-    /* Tabel Parameter */
-    .param-table {
-        width: 100%; border-collapse: collapse; font-size: 14px;
-    }
-    .param-table td { padding: 8px; border-bottom: 1px solid #eee; }
-    .param-label { font-weight: bold; color: #555; }
+    /* Status Labels */
+    .status-match { background: #d1e7dd; color: #0f5132; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.9em; }
+    .status-warn { background: #fff3cd; color: #664d03; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.9em; }
+    .status-danger { background: #f8d7da; color: #842029; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.9em; }
     
-    /* Badges */
-    .risk-high { color: white; background: #dc3545; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-    .risk-low { color: white; background: #28a745; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+    /* Input Box */
+    .stTextInput input { border: 2px solid #ced4da; border-radius: 5px; padding: 10px; }
+    .stTextInput input:focus { border-color: #E50914; box-shadow: 0 0 0 0.2rem rgba(229, 9, 20, 0.25); }
     
-    /* Input Area */
-    .input-hidden { opacity: 0; position: absolute; }
+    /* Strategy Box */
+    .strat-card { background: white; padding: 20px; border-radius: 10px; border-left: 5px solid #E50914; box-shadow: 0 2px 4px rgba(0,0,0,0.05); height: 100%; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. LOGIC ENGINE (ALL PARAMETERS)
+# 2. SENSOR & LOGIC ENGINE
 # ==========================================
 
-# --- A. SENSORS (JS) ---
-def get_sensors(key_suffix):
+# --- A. SENSORS (Javascript) ---
+def get_all_sensors(key_suffix):
+    # Mengambil semua data fingerprint sekaligus
     ip = streamlit_js_eval(js_expressions='fetch("https://api.ipify.org?format=json").then(r => r.json()).then(d => d.ip)', key=f'ip_{key_suffix}')
     sw = streamlit_js_eval(js_expressions='screen.width', key=f'sw_{key_suffix}')
+    sh = streamlit_js_eval(js_expressions='screen.height', key=f'sh_{key_suffix}')
     ua = streamlit_js_eval(js_expressions='navigator.userAgent', key=f'ua_{key_suffix}')
-    return ip, sw, ua
+    return ip, sw, sh, ua
 
-# --- B. FINGERPRINT PARSER ---
-def parse_device(ua):
+# --- B. PARSING & SCORING ---
+def parse_fingerprint(ua):
     if not ua: return "Unknown", "Unknown"
     ua = ua.lower()
-    os_name = "Windows" if "windows" in ua else "Mac/iOS" if "mac" in ua or "iphone" in ua else "Android" if "android" in ua else "Linux"
-    browser = "Chrome" if "chrome" in ua else "Safari" if "safari" in ua else "Firefox"
+    
+    # OS
+    os_name = "Linux/Other"
+    if "windows" in ua: os_name = "Windows PC"
+    elif "mac" in ua: os_name = "MacBook/iMac"
+    elif "iphone" in ua: os_name = "iPhone iOS"
+    elif "android" in ua: os_name = "Android Mobile"
+    
+    # Browser
+    browser = "Other"
+    if "edg" in ua: browser = "Edge"
+    elif "chrome" in ua: browser = "Chrome"
+    elif "safari" in ua: browser = "Safari"
+    elif "firefox" in ua: browser = "Firefox"
+    
     return os_name, browser
 
-# --- C. SCORING MODELS (SESUAI PPT) ---
-
-def calculate_trust_score(dist, ip_match, bio_match, os_match):
-    """
-    STRATEGY 1: ADAPTIVE TRUST MODEL
-    Menghitung seberapa percaya kita bahwa ini adalah User Asli.
-    """
-    score = 0
-    # 1. Lokasi (Bobot 40%)
-    if dist < 50: score += 40
-    # 2. Network (Bobot 20%)
-    if ip_match: score += 20
-    # 3. Biometrik/Perilaku (Bobot 25%) - CPM Match
-    if bio_match: score += 25
-    # 4. Device Consistency (Bobot 15%)
-    if os_match: score += 15
-    
-    return score
-
-def calculate_propensity_score(os_name, width):
-    """
-    STRATEGY 2: PROPENSITY TO PAY MODEL
-    Menghitung kekayaan user berdasarkan device (Shadow Monetization).
-    """
-    score = 50 # Baseline
-    # Hardware Premium Indicators
-    if "Mac" in os_name or "iOS" in os_name: score += 30
-    if width and width > 1600: score += 20
-    # Budget Indicators
-    if "Android" in os_name: score -= 10
-    
-    return max(0, min(100, score))
+def calculate_cpm(text, duration):
+    """Menghitung Characters Per Minute"""
+    if duration <= 0: return 0
+    # CPM = (Jumlah Karakter / Detik) * 60
+    return int((len(text) / duration) * 60)
 
 def haversine(lon1, lat1, lon2, lat2):
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
@@ -103,7 +89,7 @@ def haversine(lon1, lat1, lon2, lat2):
     c = 2 * asin(sqrt(a))
     return c * 6371
 
-# DB Utils
+# --- C. DB UTILS ---
 def load_db():
     # Cek dulu apakah file ada
     if not os.path.exists(DB_FILE): 
@@ -124,208 +110,230 @@ def reset_db():
     if os.path.exists(DB_FILE): os.remove(DB_FILE)
 
 # ==========================================
-# 3. UI DASHBOARD
+# 3. APP LOGIC
 # ==========================================
-st.title("📊 Strategic AI Solution: Monetizing Credential")
-st.markdown("Implementasi Real-Time dari strategi: **Detect (Advanced AI)** & **Convert (Shadow Monetization)**.")
+st.title("🛡️ Netflix Strategic AI Dashboard")
+st.markdown("Implementation of **Advanced AI Detection** & **Shadow Monetization**.")
 
 data = load_db()
 has_host = data is not None
 
+# Init Session for Timers
 if 'is_host' not in st.session_state: st.session_state['is_host'] = False
-if 'start_timer' not in st.session_state: st.session_state['start_timer'] = 0
+if 'page_load_time' not in st.session_state: st.session_state['page_load_time'] = time.time()
 
 with st.sidebar:
-    st.header("Admin Control")
-    if has_host and st.button("🔄 Reset Household Data"):
+    st.header("Admin Controls")
+    if has_host and st.button("🔴 Reset Household Data"):
         reset_db()
         st.session_state['is_host'] = False
         st.rerun()
 
 # ==========================================
-# FASE 1: HOUSEHOLD ANCHOR (HOST SETUP)
+# FASE 1: HOUSEHOLD ENRICHMENT (HOST)
 # ==========================================
 if not has_host or (has_host and st.session_state['is_host']):
     if not has_host:
-        st.subheader("🏠 Phase 1: Data Enrichment (Host Registration)")
-        st.info("Sistem mengumpulkan Log, Merekayasa Fitur, dan Melatih Model (Baseline).")
+        st.subheader("🏠 Phase 1: Host Data Enrichment")
+        st.info("Training Model dengan Data Lengkap Host (Biometrik + Forensik).")
         
-        # SENSORS
-        h_ip, h_sw, h_ua = get_sensors('host')
+        # 1. SENSORS GATHERING
+        h_ip, h_sw, h_sh, h_ua = get_all_sensors('host')
         
+        # 2. AUTO-TIMER INPUT
         st.write("---")
-        st.write("**🔐 Behavioral Enrollment:** Ketik frase 'netflix ai' untuk merekam pola ketik.")
+        st.markdown("**🔐 Biometric Enrollment:** Ketik frase di bawah lalu tekan ENTER.")
+        st.code("netflix secure access")
         
-        c1, c2 = st.columns([1, 3])
-        if c1.button("⏱️ Start"): st.session_state['start_timer'] = time.time()
+        # Reset timer saat user mulai mengetik (Callback trick tidak bisa di text_input standar, 
+        # jadi kita pakai waktu selisih load vs submit sebagai 'reaction + typing time')
+        # Ini metode paling seamless tanpa tombol start.
         
-        h_input = c2.text_input("Input:", label_visibility="collapsed")
+        h_input = st.text_input("Input:", key="h_in", placeholder="Ketik lalu Enter...")
         
-        if st.checkbox("📍 Lock GPS & Train Model"):
-            if st.session_state['start_timer'] == 0:
-                st.error("Klik Start dulu!")
+        if h_input:
+            if h_input.lower() == "netflix secure access":
+                # Hitung CPM otomatis (Waktu sekarang - Waktu halaman dimuat)
+                duration = time.time() - st.session_state['page_load_time']
+                # Kita kurangi sedikit buffer (misal 2 detik untuk baca) agar CPM realistis
+                adjusted_duration = max(1, duration - 2) 
+                h_cpm = calculate_cpm(h_input, adjusted_duration)
+                
+                # Parsing Fingerprint
+                h_os, h_browser = parse_fingerprint(h_ua)
+                h_res = f"{h_sw}x{h_sh}"
+                
+                st.write(f"🔍 Detected: {h_os} | {h_cpm} CPM | {h_ip}")
+                
+                if st.checkbox("📍 Lock GPS & Train Model"):
+                    loc = get_geolocation(component_key='gps_host')
+                    if loc:
+                        # SIMPAN SEMUA DATA LENGKAP
+                        db_data = {
+                            'ip': h_ip,
+                            'os': h_os,
+                            'browser': h_browser,
+                            'res': h_res,
+                            'width': h_sw, # untuk propensity
+                            'cpm': h_cpm,  # biometrik
+                            'lat': loc['coords']['latitude'],
+                            'lon': loc['coords']['longitude'],
+                            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        save_db(db_data)
+                        st.session_state['is_host'] = True
+                        st.rerun()
+                    else:
+                        st.warning("⏳ Waiting for GPS...")
             else:
-                # Hitung CPM (Biometrics)
-                dur = time.time() - st.session_state['start_timer']
-                h_cpm = (len(h_input) / dur) * 60
-                
-                h_os, h_browser = parse_device(h_ua)
-                loc = get_geolocation(component_key='gps_host')
-                
-                if loc and h_ip:
-                    db = {
-                        'ip': h_ip, 'os': h_os, 'res': h_sw,
-                        'cpm': h_cpm, # Biometric Baseline
-                        'lat': loc['coords']['latitude'], 'lon': loc['coords']['longitude']
-                    }
-                    save_db(db)
-                    st.session_state['is_host'] = True
-                    st.rerun()
-                else:
-                    st.warning("Waiting for GPS...")
+                st.error("❌ Teks salah! Ketik: 'netflix secure access'")
     else:
-        st.success("✅ HOUSEHOLD ANCHOR ACTIVE")
-        st.write("Model has been trained with Host Data.")
+        st.success("✅ HOUSEHOLD MODEL TRAINED")
+        st.write(f"Host Profile Active: {data['os']} at {data['ip']}")
 
 # ==========================================
-# FASE 2: REAL-TIME INFERENCE (VISITOR)
+# FASE 2: VISITOR ANALYSIS (REAL-TIME)
 # ==========================================
 else:
     st.write("---")
-    st.subheader("🕵️ Phase 2: AI Detection & Shadow Monetization")
+    st.subheader("🕵️ Phase 2: AI Detection & Strategy Execution")
     
-    # 1. INVISIBLE SENSORS GATHERING
-    v_ip, v_sw, v_ua = get_sensors('vis')
+    # 1. INVISIBLE SENSORING
+    v_ip, v_sw, v_sh, v_ua = get_all_sensors('vis')
     
-    # 2. CHALLENGE (Untuk Biometric Data)
-    col_chal, col_dash = st.columns([1, 3])
+    col_left, col_right = st.columns([1, 1.5])
     
-    with col_chal:
-        st.markdown('<div class="strat-box">', unsafe_allow_html=True)
-        st.write("#### 🔐 Security Challenge")
-        st.write("Verifikasi identitas dengan mengetik:")
-        st.code("netflix ai")
+    # --- KOLOM KIRI: INPUT CHALLENGE ---
+    with col_left:
+        st.markdown('<div class="strat-card">', unsafe_allow_html=True)
+        st.markdown("#### 🔑 Security Challenge")
+        st.write("Verifikasi identitas Anda:")
+        st.code("netflix secure access")
         
-        if st.button("⏱️ Start Typing"): st.session_state['start_timer'] = time.time()
-        v_input = st.text_input("Passphrase:", key="v_in")
+        # AUTO TIMER LOGIC
+        v_input = st.text_input("Passphrase:", key="v_in", placeholder="Langsung ketik & Enter...")
         
-        run_ai = st.checkbox("🚀 RUN AI DIAGNOSTICS")
-        st.markdown('</div>', unsafe_allow_html=True)
+        run_analysis = False
+        if v_input:
+            run_analysis = True
+        
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # 3. DASHBOARD HASIL (Kanan)
-    if run_ai:
-        if not v_ip:
-            st.warning("Scanning Sensors...")
-            st.stop()
+    # --- KOLOM KANAN: DASHBOARD STRATEGI ---
+    with col_right:
+        if run_analysis:
+            if not v_ip:
+                st.warning("Scanning Sensors...")
+                st.stop()
             
-        loc = get_geolocation(component_key='gps_vis')
-        
-        if loc and v_input:
-            # === FEATURE ENGINEERING (PENGOLAHAN DATA) ===
+            loc = get_geolocation(component_key='gps_vis')
             
-            # A. Biometric Calculation
-            dur = time.time() - st.session_state['start_timer']
-            v_cpm = (len(v_input) / dur) * 60
-            bio_diff = abs(data['cpm'] - v_cpm)
-            is_bio_match = bio_diff < 50 # Toleransi CPM
-            
-            # B. Forensic Params
-            v_os, v_browser = parse_device(v_ua)
-            dist = haversine(data['lon'], data['lat'], loc['coords']['latitude'], loc['coords']['longitude'])
-            is_ip_match = (v_ip == data['ip'])
-            
-            # === AI MODEL SCORING (THE BRAIN) ===
-            
-            # 1. TRUST SCORE (Untuk Strategy 1)
-            trust_score = calculate_trust_score(dist, is_ip_match, is_bio_match, (v_os == data['os']))
-            
-            # 2. PROPENSITY SCORE (Untuk Strategy 2)
-            propensity_score = calculate_propensity_score(v_os, v_sw)
-
-            # === DISPLAY DASHBOARD 3 PILAR ===
-            with col_dash:
+            if loc:
+                # === A. DATA PROCESSING ===
+                # 1. Biometrics (CPM)
+                duration = time.time() - st.session_state['page_load_time']
+                adj_duration = max(1, duration - 2)
+                v_cpm = calculate_cpm(v_input, adj_duration)
+                
+                # 2. Forensics
+                v_os, v_browser = parse_fingerprint(v_ua)
+                v_res = f"{v_sw}x{v_sh}"
+                dist = haversine(data['lon'], data['lat'], loc['coords']['latitude'], loc['coords']['longitude'])
+                
+                # 3. Validasi
+                is_bio_match = abs(data['cpm'] - v_cpm) < 50 # Toleransi 50 CPM
+                is_dist_match = dist < 60
+                is_ip_match = (v_ip == data['ip'])
+                is_os_match = (v_os == data['os'])
+                
+                # 4. Scoring (AI Models)
+                trust_score = 0
+                if is_dist_match: trust_score += 40
+                if is_bio_match: trust_score += 30
+                if is_ip_match: trust_score += 20
+                if is_os_match: trust_score += 10
+                
+                propensity_score = 50
+                if v_sw > 1500 or "Mac" in v_os or "iOS" in v_os: propensity_score += 30
+                if "Android" in v_os: propensity_score -= 10
+                
+                # === B. TABEL FORENSIK LENGKAP (REQUEST ANDA) ===
+                st.markdown("### 📡 Advanced AI Detection Layer")
+                
+                # Membangun Tabel HTML Dinamis
+                table_html = f"""
+                <table class="forensic-table">
+                    <thead>
+                        <tr>
+                            <th>PARAMETER</th>
+                            <th>🏠 HOST (BASELINE)</th>
+                            <th>📱 VISITOR (REAL-TIME)</th>
+                            <th>STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><b>Behavioral Biometrics</b><br><small>Keystroke Dynamics (CPM)</small></td>
+                            <td>{data['cpm']} CPM</td>
+                            <td>{v_cpm} CPM</td>
+                            <td><span class="{'status-match' if is_bio_match else 'status-danger'}">{'MATCH' if is_bio_match else 'ANOMALY'}</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Geolocation</b><br><small>GPS Coordinates</small></td>
+                            <td>Lat: {data['lat']:.2f}...</td>
+                            <td>Lat: {loc['coords']['latitude']:.2f}...</td>
+                            <td><span class="{'status-match' if is_dist_match else 'status-danger'}">{'HOME' if is_dist_match else f'AWAY ({int(dist)} KM)'}</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Network Signature</b><br><small>Public IP Address</small></td>
+                            <td>{data['ip']}</td>
+                            <td>{v_ip}</td>
+                            <td><span class="{'status-match' if is_ip_match else 'status-warn'}">{'SAME' if is_ip_match else 'DIFF'}</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Device OS</b><br><small>Operating System</small></td>
+                            <td>{data['os']}</td>
+                            <td>{v_os}</td>
+                            <td><span class="{'status-match' if is_os_match else 'status-warn'}">{'SAME' if is_os_match else 'DIFF'}</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Browser Engine</b><br><small>Software Agent</small></td>
+                            <td>{data['browser']}</td>
+                            <td>{v_browser}</td>
+                            <td>{'MATCH' if data['browser'] == v_browser else 'DIFF'}</td>
+                        </tr>
+                         <tr>
+                            <td><b>Screen Resolution</b><br><small>Hardware Fingerprint</small></td>
+                            <td>{data['res']}</td>
+                            <td>{v_res}</td>
+                            <td>{'MATCH' if data['res'] == v_res else 'DIFF'}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                """
+                st.markdown(table_html, unsafe_allow_html=True)
+                
+                # === C. STRATEGIC ACTION ===
+                st.markdown("### 🎯 Strategic Decision Engine")
+                
                 c1, c2 = st.columns(2)
                 
-                # KOLOM 1: ADVANCED AI DETECTION (The 5 Parameters)
-                with c1:
-                    st.markdown("### 📡 1. Advanced AI Detection")
-                    st.markdown(f"""
-                    <table class="param-table">
-                        <tr>
-                            <td class="param-label">Geolocaltion (GPS)</td>
-                            <td>{dist:.1f} KM</td>
-                            <td><span class="{'risk-low' if dist < 50 else 'risk-high'}">{'HOME' if dist < 50 else 'AWAY'}</span></td>
-                        </tr>
-                        <tr>
-                            <td class="param-label">Behavioral Biometrics</td>
-                            <td>{int(v_cpm)} CPM (vs {int(data['cpm'])})</td>
-                            <td><span class="{'risk-low' if is_bio_match else 'risk-high'}">{'MATCH' if is_bio_match else 'ANOMALY'}</span></td>
-                        </tr>
-                        <tr>
-                            <td class="param-label">Network (IP)</td>
-                            <td>{v_ip}</td>
-                            <td><span class="{'risk-low' if is_ip_match else 'risk-high'}">{'SAME' if is_ip_match else 'DIFF'}</span></td>
-                        </tr>
-                        <tr>
-                            <td class="param-label">Device Fingerprint</td>
-                            <td>{v_os}</td>
-                            <td><span class="{'risk-low' if v_os == data['os'] else 'risk-high'}">{'SAME' if v_os == data['os'] else 'DIFF'}</span></td>
-                        </tr>
-                    </table>
-                    <br>
-                    """, unsafe_allow_html=True)
-                    
-                    st.info(f"🤖 **AI Trust Score: {trust_score}%** (Threshold: 75%)")
-
-                # KOLOM 2: STRATEGIC ACTION (Monetization)
-                with c2:
-                    st.markdown("### 🎯 2. Strategic Action")
-                    
-                    # LOGIKA STRATEGI SESUAI PPT
-                    
-                    # Strategy 1: Adaptive Trust (Low Friction)
-                    if trust_score >= 75:
-                        st.success("✅ **Strategy 1: Adaptive Trust**")
-                        st.write("User Verified. **Instant Access Granted.**")
-                        st.caption("Alasan: Trust Score Tinggi (Biometrik/Lokasi Valid).")
-                        
-                    # Jika Trust Rendah -> Masuk Strategy 2: Monetization
+                # Metric AI Score
+                c1.metric("AI Trust Score", f"{trust_score}%", delta="Safe" if trust_score > 70 else "Risk", delta_color="normal" if trust_score > 70 else "inverse")
+                
+                # Logic Strategy
+                if trust_score > 70:
+                    c2.success("✅ **Strategy 1: Low Friction**")
+                    c2.write("User Verified. Instant Access.")
+                else:
+                    c2.error("⛔ **Strategy 2: Monetize**")
+                    c2.write(f"Propensity: {propensity_score}/100")
+                    if propensity_score > 70:
+                        c2.button("💎 Premium Upsell")
                     else:
-                        st.error("⛔ **Sharing Detected**")
-                        st.write("Executing **Strategy 2: Shadow Monetization**")
-                        st.progress(propensity_score / 100)
-                        st.caption(f"Propensity to Pay Score: {propensity_score}/100")
-                        
-                        # Waterfall Logic
-                        if propensity_score > 70:
-                            st.markdown("""
-                            <div style="background:#f8d7da; padding:10px; border-radius:5px;">
-                                <b>Offer: HARD PAYWALL</b><br>
-                                Target: High Value User.<br>
-                                <button>💎 Subscribe Full Price</button>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        elif propensity_score > 40:
-                            st.markdown("""
-                            <div style="background:#fff3cd; padding:10px; border-radius:5px;">
-                                <b>Offer: UPSIZING</b><br>
-                                Target: Mid Value User.<br>
-                                <button>➕ Add Extra Member</button>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown("""
-                            <div style="background:#e2e3e5; padding:10px; border-radius:5px;">
-                                <b>Offer: DOWNGRADING</b><br>
-                                Target: Low Value User.<br>
-                                <button>📺 Switch to Basic Ads</button>
-                            </div>
-                            """, unsafe_allow_html=True)
+                        c2.button("📺 Ad-Supported Plan")
 
-            # Strategy 3: Social Graph (Footer)
-            st.markdown("---")
-            st.markdown("### 🔗 3. Social Graph Analysis (Churn Reduction)")
-            st.info("💡 **Feature Enabled:** Jika user menolak tawaran di atas, aktifkan **'Profile Transfer'** untuk mengamankan history tontonan mereka ke akun baru.")
-
+            else:
+                st.info("⏳ Waiting for GPS...")
         else:
-            st.warning("⏳ Menunggu GPS...")
+            st.info("👋 Silakan ketik passphrase untuk memulai analisis.")
