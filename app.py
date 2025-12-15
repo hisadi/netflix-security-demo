@@ -7,75 +7,46 @@ from streamlit_js_eval import get_geolocation, streamlit_js_eval
 from math import radians, cos, sin, asin, sqrt
 
 # ==========================================
-# 1. SETUP UI: LIGHT MODE MODERN
+# 1. SETUP UI: CLEAN & PROFESSIONAL
 # ==========================================
-st.set_page_config(page_title="Netflix Neuro-ID", page_icon="🧠", layout="wide")
-DB_FILE = 'netflix_neuro_db.json'
+st.set_page_config(page_title="Netflix Bio-Forensics", page_icon="🧬", layout="wide")
+DB_FILE = 'netflix_bio_db.json'
 
-# CSS Custom: Light Mode + Netflix Red Accent
 st.markdown("""
 <style>
-    /* Background Putih Bersih */
-    .stApp {
-        background-color: #FFFFFF !important;
-        color: #333333 !important;
+    .stApp { background-color: #FFFFFF; color: #222; }
+    h1, h2, h3 { color: #E50914 !important; font-weight: 800 !important; }
+    
+    /* Table Styling */
+    .comp-table {
+        width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 16px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
     }
+    .comp-table thead tr { background-color: #E50914; color: #ffffff; text-align: left; }
+    .comp-table th, .comp-table td { padding: 12px 15px; border-bottom: 1px solid #dddddd; }
+    .comp-table tbody tr:nth-of-type(even) { background-color: #f3f3f3; }
     
-    /* Header Styles */
-    h1, h2 { color: #E50914 !important; font-weight: 800 !important; }
-    h3, h4 { color: #222222 !important; font-weight: 600 !important; }
-    
-    /* Metrics Card Style */
-    .metric-container {
-        background-color: #F8F9FA;
-        border: 1px solid #E0E0E0;
-        border-radius: 10px;
-        padding: 20px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        margin-bottom: 15px;
+    /* Input Area Styling */
+    .typing-area {
+        border: 2px dashed #E50914; padding: 20px; border-radius: 10px; background-color: #fff0f0; text-align: center;
     }
+    .big-code { font-size: 24px; font-weight: bold; font-family: monospace; color: #333; letter-spacing: 2px; }
     
-    /* Custom Input Fields */
-    .stTextInput > div > div > input {
-        background-color: #ffffff;
-        color: #333;
-        border: 1px solid #ccc;
-    }
-    
-    /* Buttons */
-    .stButton > button {
-        background-color: #E50914 !important;
-        color: white !important;
-        border-radius: 5px !important;
-        border: none !important;
-        padding: 0.5rem 1rem !important;
-    }
-    
-    /* Alert Boxes Custom */
-    .success-box { background-color: #d1e7dd; color: #0f5132; padding: 15px; border-radius: 8px; border: 1px solid #badbcc; }
-    .warning-box { background-color: #fff3cd; color: #664d03; padding: 15px; border-radius: 8px; border: 1px solid #ffecb5; }
-    .error-box { background-color: #f8d7da; color: #842029; padding: 15px; border-radius: 8px; border: 1px solid #f5c2c7; }
-
+    /* Status Badges */
+    .badge-ok { background-color: #d4edda; color: #155724; padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+    .badge-err { background-color: #f8d7da; color: #721c24; padding: 5px 10px; border-radius: 4px; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. LOGIC ENGINE (SENSORS & BIOMETRICS)
+# 2. LOGIC ENGINE
 # ==========================================
 
-def get_device_sensors(key_suffix):
-    # Mengambil Sensor Hardware & Network
-    ip = streamlit_js_eval(js_expressions='fetch("https://api.ipify.org?format=json").then(r => r.json()).then(d => d.ip)', key=f'ip_{key_suffix}')
-    sw = streamlit_js_eval(js_expressions='screen.width', key=f'sw_{key_suffix}')
-    ua = streamlit_js_eval(js_expressions='navigator.userAgent', key=f'ua_{key_suffix}')
-    return ip, sw, ua
+def get_client_ip(key_suffix):
+    return streamlit_js_eval(js_expressions='fetch("https://api.ipify.org?format=json").then(r => r.json()).then(d => d.ip)', key=f'ip_{key_suffix}')
 
-def parse_ua(ua):
-    if not ua: return "Unknown", "Unknown"
-    ua = ua.lower()
-    os_name = "Windows" if "windows" in ua else "Mac/iOS" if "mac" in ua or "iphone" in ua else "Android" if "android" in ua else "Linux/Other"
-    browser = "Chrome" if "chrome" in ua else "Safari" if "safari" in ua else "Firefox" if "firefox" in ua else "Edge"
-    return os_name, browser
+def get_screen_width(key_suffix):
+    return streamlit_js_eval(js_expressions='screen.width', key=f'sw_{key_suffix}')
 
 def haversine(lon1, lat1, lon2, lat2):
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
@@ -83,17 +54,16 @@ def haversine(lon1, lat1, lon2, lat2):
     c = 2 * asin(sqrt(a))
     return c * 6371
 
-def calculate_propensity(os_name, width):
-    """Menilai Kekayaan User berdasarkan Hardware"""
-    score = 50
-    if "Mac" in os_name: score += 30
-    elif "Windows" in os_name: score += 10
-    elif "Android" in os_name: score -= 10
-    
-    if width and width > 1500: score += 20 # High Res Screen
-    return max(0, min(100, score))
+def calculate_cpm(text, start_time, end_time):
+    """Menghitung Characters Per Minute"""
+    if not start_time or not end_time: return 0
+    duration = end_time - start_time
+    if duration <= 0: return 0
+    chars = len(text)
+    cpm = (chars / duration) * 60
+    return int(cpm)
 
-# DATABASE UTILS
+# DB Utils
 def load_db():
     # Cek dulu apakah file ada
     if not os.path.exists(DB_FILE): 
@@ -114,204 +84,208 @@ def reset_db():
     if os.path.exists(DB_FILE): os.remove(DB_FILE)
 
 # ==========================================
-# 3. UI UTAMA
+# 3. APP LOGIC
 # ==========================================
-st.title("🧠 Netflix Neuro-ID")
-st.markdown("##### Multi-Factor Detection: Forensics (Device/GPS) + Behavioral (Typing Biometrics)")
+st.title("🧬 Netflix Bio-Forensics")
+st.markdown("Menggabungkan **GPS**, **Network**, dan **Keystroke Dynamics (Kecepatan Ketik)**.")
 
 data = load_db()
 has_host = data is not None
 
+# Init Session State
 if 'is_host' not in st.session_state: st.session_state['is_host'] = False
+if 'host_start_time' not in st.session_state: st.session_state['host_start_time'] = None
+if 'vis_start_time' not in st.session_state: st.session_state['vis_start_time'] = None
 
-# Sidebar
 with st.sidebar:
-    st.header("Control Panel")
-    if has_host:
-        if st.button("🔄 Reset System"):
-            reset_db()
-            st.session_state['is_host'] = False
-            st.rerun()
+    if has_host and st.button("🔄 Reset System"):
+        reset_db()
+        st.session_state['is_host'] = False
+        st.rerun()
 
 # ==========================================
-# FASE 1: HOST REGISTRATION (ANCHORING)
+# FASE 1: HOST REGISTRATION (ENROLLMENT)
 # ==========================================
 if not has_host or (has_host and st.session_state['is_host']):
     if not has_host:
-        st.subheader("1. Household Registration")
-        st.info("Daftarkan perangkat utama. Sistem juga akan merekam **Gaya Mengetik** Anda sebagai biometrik.")
-    else:
-        st.success("✅ HOST DASHBOARD (Monitoring Mode)")
-        st.json(data)
-    
-    # --- SENSOR 1: Hardware ---
-    h_ip, h_sw, h_ua = get_device_sensors('host')
-    
-    if not has_host:
-        st.write("---")
-        st.markdown("#### ⌨️ Behavioral Calibration")
-        st.write("Ketik frase berikut secepat mungkin. Sistem menghitung ritme ketikan Anda.")
-        st.code("netflix and chill", language="text")
+        st.subheader("1. Household Biometric Enrollment")
+        st.info("Sistem akan merekam 'Kecepatan Mengetik' Anda sebagai password biometrik.")
         
-        # LOGIKA TYPING SPEED (BIOMETRIK SEDERHANA)
-        # Kita pakai text_input biasa, tapi kita minta user klik tombol start/stop secara implisit via submit
+        # --- BIOMETRIC RECORDER ---
+        st.markdown('<div class="typing-area">', unsafe_allow_html=True)
+        st.write("Frase Keamanan:")
+        st.markdown('<p class="big-code">netflix secure login</p>', unsafe_allow_html=True)
         
-        start_time = st.number_input("Timestamp Start (System)", value=time.time(), disabled=True, label_visibility="collapsed")
-        typing_input = st.text_input("Ketik di sini:", placeholder="netflix and chill")
-        end_time = time.time()
+        # Logic Timer: User klik Start -> Ketik -> Klik Save
+        col_btn1, col_btn2 = st.columns([1, 4])
         
-        # Hitung durasi kasar (ini demo, jadi pakai selisih render streamlt cukup oke)
-        # Note: Untuk akurasi tinggi butuh JS custom, tapi untuk demo konsep ini cukup.
+        if col_btn1.button("⏱️ START RECORDING"):
+            st.session_state['host_start_time'] = time.time()
+            st.toast("Timer Started! Ketik sekarang!")
         
-        if h_ip:
-            h_os, h_browser = parse_ua(h_ua)
-            st.caption(f"Device Fingerprint: {h_os} | {h_browser} | Screen: {h_sw}px")
-            
-            if st.checkbox("📍 Lock GPS & Save Biometrics"):
-                loc = get_geolocation(component_key='gps_host')
+        host_text = col_btn2.text_input("Ketik frase di atas di sini:", key="h_input")
+        
+        if st.checkbox("📍 Save Profile (Stop Timer & GPS)"):
+            if st.session_state['host_start_time'] is None:
+                st.error("Klik START dulu!")
+            else:
+                end_time = time.time()
+                # Hitung CPM
+                host_cpm = calculate_cpm(host_text, st.session_state['host_start_time'], end_time)
                 
-                if loc:
-                    # Simpan Durasi Mengetik sebagai 'Baseline Biometrik'
-                    # Kita asumsi panjang string / waktu
-                    if len(typing_input) > 5:
-                        # Simulasi baseline (Host biasanya cepat)
-                        # Di real world kita simpan keystroke flight time
-                        typing_baseline = 50 # millisecond per key (contoh)
-                    else:
-                        typing_baseline = 0 # Invalid
-                    
-                    db_data = {
-                        'ip': h_ip,
-                        'os': h_os,
-                        'browser': h_browser,
-                        'res': h_sw,
-                        'lat': loc['coords']['latitude'],
-                        'lon': loc['coords']['longitude'],
-                        'bio_pattern': "Fast_Desktop" if "Windows" in h_os or "Mac" in h_os else "Thumb_Mobile",
-                        'timestamp': datetime.now().timestamp()
-                    }
-                    save_db(db_data)
-                    st.session_state['is_host'] = True
-                    st.rerun()
+                # Validasi Teks
+                if host_text.lower() != "netflix secure login":
+                    st.error("❌ Teks salah! Ketik: 'netflix secure login'")
                 else:
-                    st.warning("⏳ Menunggu GPS...")
-        else:
-            st.info("Scanning sensors...")
+                    st.success(f"✅ Biometrik Terekam! Kecepatan: {host_cpm} CPM")
+                    
+                    # Ambil Sensor Lain
+                    ip = get_client_ip('host')
+                    width = get_screen_width('host')
+                    loc = get_geolocation(component_key='gps_host')
+                    
+                    if loc and ip:
+                        db_data = {
+                            'ip': ip,
+                            'cpm': host_cpm, # SIMPAN KECEPATAN ASLI
+                            'res_width': width,
+                            'lat': loc['coords']['latitude'],
+                            'lon': loc['coords']['longitude']
+                        }
+                        save_db(db_data)
+                        st.session_state['is_host'] = True
+                        time.sleep(1)
+                        st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    else:
+        st.success("✅ HOST ACTIVE")
+        st.metric("Recorded Typing Speed", f"{data['cpm']} CPM")
 
 # ==========================================
-# FASE 2: VISITOR ANALYSIS (FULL ENGINE)
+# FASE 2: VISITOR CHALLENGE & COMPARISON
 # ==========================================
 else:
-    st.subheader("2. Visitor Login & Analysis")
-    st.write("Analisis gabungan: **Lokasi** + **Device** + **Perilaku Mengetik**.")
+    st.subheader("2. Visitor Biometric Challenge")
     
-    v_ip, v_sw, v_ua = get_device_sensors('vis')
+    st.markdown('<div class="typing-area">', unsafe_allow_html=True)
+    st.write("Silakan ketik ulang frase ini untuk verifikasi identitas:")
+    st.markdown('<p class="big-code">netflix secure login</p>', unsafe_allow_html=True)
     
-    st.markdown("""
-    <div class="metric-container">
-        <h4>⌨️ Active Biometric Challenge</h4>
-        <p>Untuk memverifikasi bahwa Anda adalah pemilik akun, silakan ketik frase keamanan:</p>
-        <code style="font-size:1.2em; font-weight:bold;">netflix and chill</code>
-    </div>
-    """, unsafe_allow_html=True)
+    c1, c2 = st.columns([1, 4])
+    if c1.button("⏱️ START TYPING"):
+        st.session_state['vis_start_time'] = time.time()
+        st.toast("Timer Berjalan...")
+        
+    vis_text = c2.text_input("Ketik di sini:", key="v_input")
     
-    vis_input = st.text_input("Ketik frase di atas:", key="vis_typing")
-    
-    if st.checkbox("🚀 Verify Identity"):
-        if not v_ip:
-            st.warning("Scanning network...")
+    if st.checkbox("🚀 ANALYZE & COMPARE"):
+        if st.session_state['vis_start_time'] is None:
+            st.error("Klik tombol START TYPING sebelum mengetik!")
             st.stop()
             
+        vis_end_time = time.time()
+        vis_cpm = calculate_cpm(vis_text, st.session_state['vis_start_time'], vis_end_time)
+        
+        # Validasi
+        if vis_text.lower() != "netflix secure login":
+            st.error("Teks salah. Hasil analisis tidak valid.")
+            st.stop()
+            
+        # Ambil Sensor Visitor
+        vis_ip = get_client_ip('vis')
+        vis_width = get_screen_width('vis')
         loc = get_geolocation(component_key='gps_vis')
         
-        if loc and vis_input.lower() == "netflix and chill":
-            # === ENGINE ANALISIS ===
+        if loc and vis_ip:
+            # === LOGIKA PERBANDINGAN ===
             
-            # 1. Parsing Data
-            v_os, v_browser = parse_ua(v_ua)
-            v_lat = loc['coords']['latitude']
-            v_lon = loc['coords']['longitude']
+            # 1. Analisis Biometrik (CPM)
+            # Toleransi +/- 40 CPM (Manusia tidak robot, ada variasi dikit)
+            cpm_diff = abs(data['cpm'] - vis_cpm)
+            is_bio_match = cpm_diff < 50 
             
-            # 2. BEHAVIORAL BIOMETRICS MATCHING (Simulasi Logic)
-            # Logika: Jika Host pakai PC (Keyboard fisik) dan Visitor pakai HP (Layar sentuh),
-            # Pola ketikan pasti beda drastis.
+            bio_verdict = "✅ MATCH" if is_bio_match else "⛔ MISMATCH"
+            bio_class = "badge-ok" if is_bio_match else "badge-err"
+            bio_detail = f"Diff: {cpm_diff} CPM"
             
-            host_device_type = "Desktop" if "Windows" in data['os'] or "Mac" in data['os'] else "Mobile"
-            vis_device_type = "Desktop" if "Windows" in v_os or "Mac" in v_os else "Mobile"
+            # 2. Analisis Lokasi
+            dist = haversine(data['lon'], data['lat'], loc['coords']['latitude'], loc['coords']['longitude'])
+            is_dist_ok = dist < 60
+            dist_verdict = "✅ HOME" if is_dist_ok else f"⛔ AWAY ({int(dist)} KM)"
+            dist_class = "badge-ok" if is_dist_ok else "badge-err"
             
-            # Skor Biometrik
-            if host_device_type == vis_device_type:
-                bio_score = 90 # Match tinggi (Sama-sama PC atau sama-sama HP)
-                bio_status = "✅ MATCH"
-            else:
-                bio_score = 40 # Mismatch (Host PC vs Visitor HP)
-                bio_status = "⚠️ MISMATCH"
-                
-            # 3. FORENSIC MATCHING
-            dist = haversine(data['lon'], data['lat'], v_lon, v_lat)
-            ip_match = (v_ip == data['ip'])
+            # 3. Analisis Network
+            is_ip_ok = (vis_ip == data['ip'])
+            ip_verdict = "✅ SAME WIFI" if is_ip_ok else "⚠️ DIFF NET"
+            ip_class = "badge-ok" if is_ip_ok else "badge-warn"
             
-            # 4. PROPENSITY SCORING
-            propensity = calculate_propensity(v_os, v_sw)
+            # 4. Propensity (Kekayaan)
+            propensity = 50
+            if vis_width > 1500: propensity += 30 # PC/High Res
+            elif vis_width < 500: propensity -= 10 # HP Low Res
             
-            # === TAMPILAN DASHBOARD HASIL ===
+            # === TABEL FORENSIK (THE WOW FACTOR) ===
+            st.write("### 📋 Forensic & Biometric Report")
+            
+            html_table = f"""
+            <table class="comp-table">
+                <thead>
+                    <tr>
+                        <th>PARAMETER</th>
+                        <th>🏠 HOST DATA (BASELINE)</th>
+                        <th>📱 VISITOR DATA (REAL-TIME)</th>
+                        <th>VERDICT</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><b>1. Keystroke Dynamics</b><br><small>(Typing Speed)</small></td>
+                        <td><b>{data['cpm']}</b> CPM</td>
+                        <td><b>{vis_cpm}</b> CPM</td>
+                        <td><span class="{bio_class}">{bio_verdict}</span><br><small>{bio_detail}</small></td>
+                    </tr>
+                    <tr>
+                        <td><b>2. Physical Location</b><br><small>(GPS Coordinate)</small></td>
+                        <td>Lat: {data['lat']:.2f}...</td>
+                        <td>Lat: {loc['coords']['latitude']:.2f}...</td>
+                        <td><span class="{dist_class}">{dist_verdict}</span></td>
+                    </tr>
+                    <tr>
+                        <td><b>3. Network Signature</b><br><small>(Public IP)</small></td>
+                        <td>{data['ip']}</td>
+                        <td>{vis_ip}</td>
+                        <td><span class="{ip_class}">{ip_verdict}</span></td>
+                    </tr>
+                </tbody>
+            </table>
+            """
+            st.markdown(html_table, unsafe_allow_html=True)
+            
             st.divider()
-            st.markdown("### 🔍 Forensic & Biometric Report")
             
-            col1, col2, col3 = st.columns(3)
+            # === KEPUTUSAN FINAL ===
+            st.subheader("🤖 AI Decision Engine")
             
-            with col1:
-                st.markdown("**1. Physical Layer**")
-                st.metric("Distance", f"{dist:.1f} KM", delta="Risk" if dist > 60 else "Safe", delta_color="inverse")
-                st.caption(f"IP Match: {'Yes' if ip_match else 'No'}")
+            # Skenario 1: Jarak Jauh + Cara Ngetik Beda (FIX SHARING)
+            if not is_dist_ok and not is_bio_match:
+                st.error("⛔ BLOCKED: ACCOUNT SHARING DETECTED")
+                st.write("**Reason:** Lokasi jauh DAN pola biometrik (kecepatan mengetik) sangat berbeda. Ini bukan pemilik akun.")
                 
-            with col2:
-                st.markdown("**2. Behavioral Layer**")
-                st.metric("Biometric Score", f"{bio_score}/100", delta=bio_status)
-                st.caption(f"Input Pattern: {vis_device_type} Typing")
-                
-            with col3:
-                st.markdown("**3. Value Layer**")
-                st.metric("Propensity Score", f"{propensity}/100")
-                st.caption(f"Device: {v_os} ({'High End' if propensity>60 else 'Standard'})")
-            
-            st.write("---")
-            
-            # === DECISION MATRIX (FINAL LOGIC) ===
-            
-            # A. HARD BLOCK (Jarak Jauh + Biometrik Salah)
-            if dist > 60 and bio_score < 50:
-                st.markdown("""<div class="error-box">
-                    <h3>⛔ BLOCKED: ACCOUNT SHARING DETECTED</h3>
-                    <p>Lokasi jauh dan pola biometrik (cara mengetik) tidak sesuai dengan pemilik akun.</p>
-                </div>""", unsafe_allow_html=True)
-                
-                # MONETIZATION OFFER
-                st.write("")
-                st.subheader("💡 AI Recommendation (Monetization)")
-                if propensity > 70:
-                    st.button("💎 Subscribe Premium (Full Price)")
-                    st.caption("User mampu membayar (High Value Device).")
+                # Monetization
+                if propensity > 60:
+                    st.button("💎 Subscribe Premium (High Value Device)")
                 else:
-                    st.button("📺 Subscribe Basic (Ad-Supported)")
-                    st.caption("User budget sensitive. Tawarkan paket Iklan.")
+                    st.button("📺 Subscribe Basic with Ads")
                     
-            # B. SOFT CHALLENGE (Jarak Jauh TAPI Biometrik Cocok - Travel Mode)
-            elif dist > 60 and bio_score >= 80:
-                st.markdown("""<div class="success-box">
-                    <h3>✅ TRAVEL MODE APPROVED</h3>
-                    <p>Lokasi jauh, TAPI pola biometrik cocok. User diverifikasi sebagai pemilik akun yang sedang bepergian.</p>
-                </div>""", unsafe_allow_html=True)
+            # Skenario 2: Jarak Jauh + Cara Ngetik Sama (TRAVELING)
+            elif not is_dist_ok and is_bio_match:
+                st.success("✅ TRAVEL MODE APPROVED")
+                st.write(f"**Reason:** Lokasi jauh, tetapi pola ketik ({vis_cpm} CPM) sangat mirip dengan Host ({data['cpm']} CPM). Pemilik sedang liburan.")
                 
-            # C. HOUSEHOLD MATCH (Jarak Dekat)
+            # Skenario 3: Jarak Dekat (HOUSEHOLD)
             else:
-                st.markdown("""<div class="success-box">
-                    <h3>✅ HOUSEHOLD ACCESS GRANTED</h3>
-                    <p>Perangkat berada di lokasi rumah yang valid.</p>
-                </div>""", unsafe_allow_html=True)
-                
-        elif vis_input.lower() != "netflix and chill":
-            st.error("❌ Frase salah. Ketikan tidak dapat dianalisis.")
-        else:
-            st.warning("⏳ Waiting for GPS...")
+                st.success("✅ HOUSEHOLD ACCESS GRANTED")
+                st.write("**Reason:** Perangkat berada di lokasi rumah yang valid.")
 
+    st.markdown('</div>', unsafe_allow_html=True)
