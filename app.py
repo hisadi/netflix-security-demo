@@ -100,178 +100,224 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# FASE 1: HOST ENROLLMENT
+# FASE 1: HOST DATA ENRICHMENT
 # ==========================================
 if not has_host or (has_host and st.session_state['is_host']):
     if not has_host:
         st.subheader("🏠 Phase 1: Host Enrollment")
-        st.info("Pastikan GPS browser diizinkan (Allow) agar titik koordinat akurat.")
+        st.info("Training Model dengan Data Rumah Tangga (Biometrik + Forensik).")
         
+        # SENSORS
         h_ip, h_sw, h_sh, h_ua = get_all_sensors('host')
         
         st.write("---")
-        st.write("🔐 **Biometric Pattern:** Ketik 'netflix' lalu ENTER.")
-        h_input = st.text_input("Input:", key="h_in")
+        st.write("🔐 **Biometric Pattern:** Ketik frase berikut lalu tekan ENTER.")
+        st.code("netflix secure access")
         
-        # GPS COMPONENT
-        loc = get_geolocation(component_key='gps_host')
+        h_input = st.text_input("Input:", key="h_in", placeholder="Ketik cepat...")
         
-        # MONITOR GPS DEBUG (Supaya kelihatan errornya)
-        if loc:
-            lat = loc['coords']['latitude']
-            lon = loc['coords']['longitude']
-            acc = loc['coords']['accuracy']
-            st.markdown(f"<div class='gps-monitor'>📡 GPS DETECTED: {lat}, {lon} (Akurasi: {acc}m)</div>", unsafe_allow_html=True)
-            
-            if h_input == "netflix":
-                if st.button("📍 SAVE HOUSEHOLD PROFILE"):
-                    # Validasi Anti-Null Island (0,0)
-                    if lat == 0 or lon == 0:
-                        st.error("❌ GPS belum lock (Koordinat 0,0). Tunggu sebentar atau refresh.")
-                    else:
-                        dur = time.time() - st.session_state['page_load_time']
-                        h_cpm = calculate_cpm(h_input, max(1, dur - 3))
-                        h_os, h_browser, h_class = parse_fingerprint(h_ua)
-                        
+        if h_input:
+            if h_input.lower() == "netflix secure access":
+                # CPM Calculation
+                dur = time.time() - st.session_state['page_load_time']
+                h_cpm = calculate_cpm(h_input, max(1, dur - 3)) # Buffer reaction time
+                
+                h_os, h_browser, h_class = parse_fingerprint(h_ua)
+                st.write(f"Detected: {h_os} | {h_cpm} CPM")
+                
+                if st.checkbox("📍 Lock GPS & Train Model"):
+                    loc = get_geolocation(component_key='gps_host')
+                    if loc:
                         db = {
                             'ip': h_ip, 'os': h_os, 'browser': h_browser, 'dev_class': h_class,
                             'res': f"{h_sw}x{h_sh}", 'width': h_sw, 'cpm': h_cpm,
-                            'lat': lat, 'lon': lon
+                            'lat': loc['coords']['latitude'], 'lon': loc['coords']['longitude']
                         }
                         save_db(db)
                         st.session_state['is_host'] = True
                         st.rerun()
-        else:
-            st.warning("⏳ Menunggu Sinyal GPS... (Pastikan klik Allow di popup browser)")
-            
+                    else:
+                        st.warning("Waiting for GPS...")
     else:
         st.success("✅ HOUSEHOLD MODEL ACTIVE")
-        st.write(f"Host Location: {data['lat']}, {data['lon']}")
+        st.write(f"Host Profile: {data['os']} ({data['cpm']} CPM) at {data['ip']}")
 
 # ==========================================
-# FASE 2: VISITOR ANALYSIS
+# FASE 2: VISITOR ANALYSIS & VERDICT
 # ==========================================
 else:
     st.write("---")
-    st.subheader("🕵️ Phase 2: AI Detection")
+    st.subheader("🕵️ Phase 2: AI Detection & Strategy")
     
     v_ip, v_sw, v_sh, v_ua = get_all_sensors('vis')
-    st.write("Verifikasi identitas:")
-    v_input = st.text_input("Passphrase:", key="v_in", placeholder="Ketik 'netflix'...")
+    
+    col_input, col_result = st.columns([1, 2])
+    
+    with col_input:
+        st.markdown('<div class="strat-card">', unsafe_allow_html=True)
+        st.write("#### 🔑 Security Challenge")
+        st.write("Verifikasi identitas:")
+        st.code("netflix secure access")
+        
+        v_input = st.text_input("Passphrase:", key="v_in", placeholder="Ketik & Enter...")
+        st.caption("AI akan menganalisis gaya mengetik Anda.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     if v_input:
-        loc = get_geolocation(component_key='gps_vis')
+        if not v_ip:
+            st.warning("Scanning Sensors...")
+            st.stop()
         
-        if loc:
-            lat = loc['coords']['latitude']
-            lon = loc['coords']['longitude']
-            st.markdown(f"<div class='gps-monitor'>📡 VISITOR GPS: {lat}, {lon}</div>", unsafe_allow_html=True)
+        with col_result:
+            loc = get_geolocation(component_key='gps_vis')
             
-            # --- CALCULATIONS ---
-            dur = time.time() - st.session_state['page_load_time']
-            v_cpm = calculate_cpm(v_input, max(1, dur - 3))
-            v_os, v_browser, v_class = parse_fingerprint(v_ua)
-            v_res = f"{v_sw}x{v_sh}"
-            
-            # Hitung Jarak
-            dist = haversine(data['lon'], data['lat'], lon, lat)
-            
-            # === MATCHING LOGIC ===
-            is_dist_match = dist < 60 # Radius 60 KM
-            cpm_diff = abs(data['cpm'] - v_cpm)
-            is_bio_match = (cpm_diff < 50) and (data['dev_class'] == v_class)
-            
-            # DECISION TREE
-            if is_dist_match:
-                verdict_title = "✅ LOGIN GRANTED"
-                verdict_class = "v-success"
-                verdict_msg = "Perangkat di lokasi rumah."
-            elif not is_dist_match and is_bio_match:
-                verdict_title = "⚠️ VERIFY IDENTITY (OTP)"
-                verdict_class = "v-warning"
-                verdict_msg = "Lokasi jauh, Biometrik cocok (Travel Mode)."
-            else:
-                verdict_title = "⛔ SHARING DETECTED"
-                verdict_class = "v-danger"
-                verdict_msg = "Lokasi jauh & Pola berbeda."
-
-            # OUTPUT BANNER
-            st.markdown(f"""
-            <div class="verdict-box {verdict_class}">
-                <h2 style="margin:0; color:inherit !important;">{verdict_title}</h2>
-                <p style="margin:0;">{verdict_msg}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # FULL FORENSIC TABLE
-            st.markdown("### 📋 7-Parameter Forensic Evidence")
-            
-            # Warna indikator jarak
-            dist_badge = "b-green" if is_dist_match else "b-red"
-            
-            table_html = f"""
-            <table class="forensic-table">
-                <thead>
-                    <tr><th>PARAMETER</th><th>🏠 HOST</th><th>📱 VISITOR</th><th>STATUS</th></tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><b>GPS Coordinates</b></td>
-                        <td>{data['lat']:.4f}, {data['lon']:.4f}</td>
-                        <td>{lat:.4f}, {lon:.4f}</td>
-                        <td><span class="badge {dist_badge}">{int(dist)} KM</span></td>
-                    </tr>
-                    <tr>
-                        <td><b>Typing Speed</b></td>
-                        <td>{data['cpm']} CPM</td>
-                        <td>{v_cpm} CPM</td>
-                        <td><span class="badge {'b-green' if abs(data['cpm']-v_cpm) < 50 else 'b-red'}">{'MATCH' if abs(data['cpm']-v_cpm) < 50 else 'DIFF'}</span></td>
-                    </tr>
-                     <tr>
-                        <td><b>Network IP</b></td>
-                        <td>{data['ip']}</td>
-                        <td>{v_ip}</td>
-                        <td><span class="badge {'b-green' if data['ip'] == v_ip else 'b-red'}">{'SAME' if data['ip'] == v_ip else 'DIFF'}</span></td>
-                    </tr>
-                    <tr>
-                        <td><b>OS Platform</b></td>
-                        <td>{data['os']}</td>
-                        <td>{v_os}</td>
-                        <td>{v_os}</td>
-                    </tr>
-                    <tr>
-                        <td><b>Browser</b></td>
-                        <td>{data['browser']}</td>
-                        <td>{v_browser}</td>
-                        <td>Match</td>
-                    </tr>
-                     <tr>
-                        <td><b>Resolution</b></td>
-                        <td>{data['res']}</td>
-                        <td>{v_res}</td>
-                        <td>Match</td>
-                    </tr>
-                     <tr>
-                        <td><b>Device Class</b></td>
-                        <td>{data['dev_class']}</td>
-                        <td>{v_class}</td>
-                        <td>{'MATCH' if data['dev_class'] == v_class else 'DIFF'}</td>
-                    </tr>
-                </tbody>
-            </table>
-            """
-            st.markdown(table_html, unsafe_allow_html=True)
-
-            # STRATEGIC ACTION (Jika Blocked)
-            if verdict_title == "⛔ SHARING DETECTED":
-                st.markdown("### 🎯 Strategic Action")
+            if loc:
+                # === A. DATA PROCESSING ===
+                dur = time.time() - st.session_state['page_load_time']
+                v_cpm = calculate_cpm(v_input, max(1, dur - 3))
+                v_os, v_browser, v_class = parse_fingerprint(v_ua)
+                v_res = f"{v_sw}x{v_sh}"
+                dist = haversine(data['lon'], data['lat'], loc['coords']['latitude'], loc['coords']['longitude'])
+                
+                # === B. MATCHING LOGIC ===
+                # 1. Biometric (CPM + Device Class)
+                cpm_diff = abs(data['cpm'] - v_cpm)
+                is_bio_match = (cpm_diff < 50) and (data['dev_class'] == v_class)
+                
+                # 2. Forensics
+                is_dist_match = dist < 60
+                is_ip_match = (v_ip == data['ip'])
+                
+                # 3. Propensity Score (Kekayaan)
                 propensity = 50
                 if v_sw > 1500 or "Mac" in v_os or "iOS" in v_os: propensity += 30
+                if "Android" in v_os: propensity -= 10
                 
-                if propensity > 70:
-                    st.error("💎 Target: High Value -> Offer Premium Plan")
+                # === C. DECISION TREE (FINAL VERDICT) ===
+                
+                # CASE 1: HOUSEHOLD MATCH (Jarak Dekat)
+                if is_dist_match:
+                    verdict_title = "✅ LOGIN GRANTED"
+                    verdict_msg = "Strategy 1: Adaptive Trust (Low Friction)"
+                    verdict_desc = "Perangkat berada di lokasi rumah yang valid."
+                    verdict_class = "v-success"
+                    
+                # CASE 2: TRAVEL MODE (Jarak Jauh TAPI Biometrik Cocok)
+                elif not is_dist_match and is_bio_match:
+                    verdict_title = "⚠️ VERIFY IDENTITY (OTP)"
+                    verdict_msg = "Strategy 1.5: Travel Mode Protection"
+                    verdict_desc = "Lokasi jauh, tapi Pola Biometrik cocok. Kirim OTP ke Email."
+                    verdict_class = "v-warning"
+                    
+                # CASE 3: SHARING DETECTED (Jarak Jauh + Biometrik Beda)
                 else:
-                    st.info("📺 Target: Budget -> Offer Ad-Supported Plan")
+                    verdict_title = "⛔ SHARING DETECTED"
+                    verdict_msg = "Strategy 2: Shadow Monetization"
+                    verdict_desc = "Lokasi jauh DAN Pola Biometrik tidak cocok. Akses diblokir."
+                    verdict_class = "v-danger"
 
-        else:
-            st.info("⏳ Menunggu Sinyal GPS... (Refresh jika macet)")
+                # === D. DISPLAY DASHBOARD ===
+                
+                # 1. VERDICT BANNER (OUTPUT UTAMA)
+                st.markdown(f"""
+                <div class="verdict-box {verdict_class}">
+                    <h2 style="margin:0; color:inherit !important;">{verdict_title}</h2>
+                    <h4 style="margin:5px 0; color:inherit !important;">{verdict_msg}</h4>
+                    <p style="margin:0; color:inherit !important;">{verdict_desc}</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # 2. FULL FORENSIC TABLE (BUKTI DATA)
+                st.markdown("### 📋 7-Parameter Forensic Evidence")
+                
+                table_html = f"""
+                <table class="forensic-table">
+                    <thead>
+                        <tr>
+                            <th>PARAMETER</th>
+                            <th>🏠 HOST (BASELINE)</th>
+                            <th>📱 VISITOR (REAL-TIME)</th>
+                            <th>STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><b>1. Typing Speed (CPM)</b></td>
+                            <td>{data['cpm']} CPM</td>
+                            <td>{v_cpm} CPM</td>
+                            <td><span class="badge {'b-green' if abs(data['cpm']-v_cpm) < 50 else 'b-red'}">{'MATCH' if abs(data['cpm']-v_cpm) < 50 else 'ANOMALY'}</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>2. GPS Location</b></td>
+                            <td>Lat: {data['lat']:.2f}...</td>
+                            <td>Lat: {loc['coords']['latitude']:.2f}...</td>
+                            <td><span class="badge {'b-green' if is_dist_match else 'b-red'}">{'HOME' if is_dist_match else f'AWAY ({int(dist)} KM)'}</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>3. Device Class</b></td>
+                            <td>{data['dev_class']}</td>
+                            <td>{v_class}</td>
+                            <td><span class="badge {'b-green' if data['dev_class'] == v_class else 'b-red'}">{'MATCH' if data['dev_class'] == v_class else 'DIFF'}</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>4. OS Platform</b></td>
+                            <td>{data['os']}</td>
+                            <td>{v_os}</td>
+                            <td><span class="badge {'b-green' if data['os'] == v_os else 'b-yellow'}">{'SAME' if data['os'] == v_os else 'DIFF'}</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>5. Browser Engine</b></td>
+                            <td>{data['browser']}</td>
+                            <td>{v_browser}</td>
+                            <td>{'MATCH' if data['browser'] == v_browser else 'DIFF'}</td>
+                        </tr>
+                        <tr>
+                            <td><b>6. Network IP</b></td>
+                            <td>{data['ip']}</td>
+                            <td>{v_ip}</td>
+                            <td><span class="badge {'b-green' if is_ip_match else 'b-yellow'}">{'SAME' if is_ip_match else 'DIFF'}</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>7. Screen Res</b></td>
+                            <td>{data['res']}</td>
+                            <td>{v_res}</td>
+                            <td>{'MATCH' if data['res'] == v_res else 'DIFF'}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                """
+                st.markdown(table_html, unsafe_allow_html=True)
+                
+                # 3. ACTIONABLE OFFER (JIKA DIBLOKIR)
+                if verdict_title == "⛔ SHARING DETECTED":
+                    st.markdown("### 🎯 Strategic Action (Conversion)")
+                    
+                    c_offer, c_churn = st.columns(2)
+                    
+                    with c_offer:
+                        st.markdown(f'<div class="strat-card">', unsafe_allow_html=True)
+                        st.write(f"**Propensity Score:** {propensity}/100")
+                        
+                        if propensity > 70:
+                            st.error("💎 TARGET: HIGH VALUE USER")
+                            st.write("Rekomendasi: **Hard Paywall (Premium)**")
+                            st.button("Subscribe Premium Plan")
+                        elif propensity > 40:
+                            st.warning("➕ TARGET: MID VALUE USER")
+                            st.write("Rekomendasi: **Add Extra Member**")
+                            st.button("Add Member (+Rp20rb)")
+                        else:
+                            st.info("📺 TARGET: BUDGET USER")
+                            st.write("Rekomendasi: **Ad-Supported Plan**")
+                            st.button("Switch to Basic Ads")
+                        st.markdown('</div>', unsafe_allow_html=True)
+
+                    with c_churn:
+                        st.markdown(f'<div class="strat-card">', unsafe_allow_html=True)
+                        st.write("#### 🔗 Strategy 3: Social Graph")
+                        st.write("Cegah pembatalan langganan dengan fitur transfer profil.")
+                        st.button("📂 Transfer Profile (Save History)")
+                        st.markdown('</div>', unsafe_allow_html=True)
+
+            else:
+                st.info("⏳ Waiting for GPS Signal...")
