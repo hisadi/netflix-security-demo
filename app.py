@@ -292,7 +292,7 @@ else:
                         <td><b>2. GPS Location</b></td>
                         <td>Lat: {data['lat']:.4f}</td>
                         <td>Lat: {lat:.4f}</td>
-                        <td><span class="badge {'b-green' if is_dist_match else 'b-red'}">{'HOME' if is_dist_match else f'AWAY ({int(dist)} KM)'}</span></td>
+                        <td><span class="badge {'b-green' if is_dist_match else 'b-red'}">{f'HOME ({int(dist)} KM)' if is_dist_match else f'AWAY ({int(dist)} KM)'}</span></td>
                     </tr>
                     <tr>
                         <td><b>3. Device Class</b></td>
@@ -356,3 +356,4 @@ else:
 
         else:
             st.warning("⏳ Menunggu Sinyal GPS... (Mohon tunggu koordinat muncul)")
+
