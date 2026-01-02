@@ -156,7 +156,7 @@ col_main, col_guide = st.columns([3, 1])
 with col_guide:
     st.markdown("""
     <div class="tutorial-box">
-        <div class="tut-header">🔍 Panduan Demo</div>
+        <div class="tut-header">🔍 Panduan Penggunaan Aplikasi (BACA TERLEBIH DAHULU) </div>
         <div class="tut-content">
             <b>1. Fase Host (Enrollment):</b>
             <ul>
