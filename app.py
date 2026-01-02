@@ -171,6 +171,11 @@ with col_guide:
     <div class="tutorial-box">
         <div class="tut-header">🧪 Fase Visitor (Scoring)</div>
         <div class="tut-content">
+            <b>2. Fase Visitor (Scoring):</b>
+            <b>Login Lewat Device Yang Berbeda, masuk ke link yang sama : https://netflix-security.streamlit.app/</b>
+            
+            <b>Lakukan Hal yang sama seperti di Fase Host</b>
+            <b>Selanjutnya akan muncul 3 Output Skenario : </b>
             <b>Skenario Lolos (Trusted):</b>
             <ul>
                 <li>Login dekat lokasi Host.</li>
